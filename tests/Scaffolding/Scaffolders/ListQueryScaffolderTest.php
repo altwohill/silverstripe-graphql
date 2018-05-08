@@ -1,6 +1,6 @@
 <?php
 
-namespace SilverStripe\GraphQL\Tests\Scaffolders;
+namespace SilverStripe\GraphQL\Tests\Scaffolders\Scaffolding;
 
 use SilverStripe\GraphQL\Manager;
 use SilverStripe\Dev\SapphireTest;
@@ -10,6 +10,40 @@ use GraphQL\Type\Definition\ObjectType;
 
 class ListQueryScaffolderTest extends SapphireTest
 {
+    public function testGetPaginationLimit()
+    {
+        /** @var Manager $observer */
+        $observer = $this->getMockBuilder(Manager::class)
+            ->setMethods(['addQuery'])
+            ->getMock();
+        $scaffold = new ListQueryScaffolder($observer, 'test');
+
+        $this->assertEquals(100, $scaffold->getPaginationLimit());
+
+        $scaffold->setPaginationLimit(200);
+        $this->assertEquals(100, $scaffold->getPaginationLimit());
+
+        $scaffold->setPaginationLimit(25);
+        $this->assertEquals(25, $scaffold->getPaginationLimit());
+    }
+
+    public function testMaximumPaginationLimit()
+    {
+        /** @var Manager $observer */
+        $observer = $this->getMockBuilder(Manager::class)
+            ->setMethods(['addQuery'])
+            ->getMock();
+        $scaffold = new ListQueryScaffolder($observer, 'test');
+
+        $this->assertEquals(100, $scaffold->getMaximumPaginationLimit());
+
+        $scaffold->setMaximumPaginationLimit(200);
+        $this->assertEquals(200, $scaffold->getMaximumPaginationLimit());
+
+        $scaffold->setMaximumPaginationLimit(25);
+        $this->assertEquals(25, $scaffold->getPaginationLimit());
+    }
+
     public function testListQueryScaffolderUnpaginated()
     {
         /** @var Manager $observer */
@@ -50,6 +84,8 @@ class ListQueryScaffolderTest extends SapphireTest
     {
         $scaffolder = new ListQueryScaffolder('testQuery', 'test');
         $scaffolder->setUsePagination(true);
+        $scaffolder->setPaginationLimit(25);
+        $scaffolder->setMaximumPaginationLimit(110);
         $scaffolder->addArgs(['Test' => 'String']);
         $scaffolder->addSortableFields(['test']);
         $manager = new Manager();
@@ -71,18 +107,50 @@ class ListQueryScaffolderTest extends SapphireTest
         /** @var ListQueryScaffolder $mock */
         $mock = $this->getMockBuilder(ListQueryScaffolder::class)
             ->setConstructorArgs(['testQuery', 'testType'])
-            ->setMethods(['addSortableFields', 'setUsePagination'])
+            ->setMethods([
+                'addSortableFields',
+                'setUsePagination',
+                'setPaginationLimit',
+                'setMaximumPaginationLimit',
+            ])
             ->getMock();
         $mock->expects($this->once())
             ->method('addSortableFields')
             ->with(['Test1', 'Test2']);
-        $mock->expects($this->once())
+        $mock->expects($this->exactly(3))
             ->method('setUsePagination')
-            ->with(false);
+            ->withConsecutive([false], [[
+                'limit' => 25,
+                'maximumLimit' => 110
+            ]], [[
+                'defaultLimit' => 25,
+                'maximumLimit' => 110
+            ]]);
 
         $mock->applyConfig([
             'sortableFields' => ['Test1', 'Test2'],
             'paginate' => false,
+        ]);
+
+        $mock->expects($this->exactly(2))
+            ->method('setPaginationLimit')
+            ->with(25);
+        $mock->expects($this->exactly(2))
+            ->method('setMaximumPaginationLimit')
+            ->with(110);
+
+        $mock->applyConfig([
+            'paginate' => [
+                'limit' => 25,
+                'maximumLimit' => 110
+            ],
+        ]);
+
+        $mock->applyConfig([
+            'paginate' => [
+                'defaultLimit' => 25,
+                'maximumLimit' => 110
+            ],
         ]);
     }
 

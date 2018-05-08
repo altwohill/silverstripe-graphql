@@ -1,7 +1,8 @@
 <?php
 
-namespace SilverStripe\GraphQL\Tests\Scaffolders\CRUD;
+namespace SilverStripe\GraphQL\Tests\Scaffolding\Scaffolders\CRUD;
 
+use GraphQL\Type\Definition\NonNull;
 use GraphQL\Type\Definition\ObjectType;
 use GraphQL\Type\Definition\ResolveInfo;
 use GraphQL\Type\Definition\StringType;
@@ -13,6 +14,7 @@ use SilverStripe\GraphQL\Tests\Fake\DataObjectFake;
 use SilverStripe\GraphQL\Tests\Fake\FakePage;
 use SilverStripe\GraphQL\Tests\Fake\FakeRedirectorPage;
 use SilverStripe\GraphQL\Tests\Fake\RestrictedDataObjectFake;
+use SilverStripe\ORM\DataList;
 use SilverStripe\Security\Member;
 
 class ReadTest extends SapphireTest
@@ -35,7 +37,7 @@ class ReadTest extends SapphireTest
     {
         $read = new Read(DataObjectFake::class);
         $manager = new Manager();
-        $manager->addType(new ObjectType(['name' => 'GraphQL_DataObjectFake']), 'GraphQL_DataObjectFake');
+        $manager->addType(new ObjectType(['name' => 'SilverStripeDataObjectFake']), 'SilverStripeDataObjectFake');
         $read->addToManager($manager);
         $scaffold = $read->scaffold($manager);
 
@@ -63,7 +65,9 @@ class ReadTest extends SapphireTest
         );
 
         $this->assertArrayHasKey('edges', $response);
-        $this->assertEquals([$ID1, $ID3, $ID2], $response['edges']->column('ID'));
+        /** @var DataList $edges */
+        $edges = $response['edges'];
+        $this->assertEquals([$ID1, $ID3, $ID2], $edges->column('ID'));
     }
 
     public function testReadOperationArgs()
@@ -78,42 +82,5 @@ class ReadTest extends SapphireTest
         $args = $scaffold['args'];
         $this->assertArrayHasKey('MyField', $args);
         $this->assertInstanceOf(StringType::class, $args['MyField']['type']);
-    }
-
-    public function testUnionInheritance()
-    {
-        $redirectorScaffold = new DataObjectScaffolder(FakeRedirectorPage::class);
-        $redirectorScaffold->addToManager($manager = new Manager());
-        $read = new Read(FakeRedirectorPage::class);
-        $read->setUsePagination(false);
-        $read->addToManager($manager);
-        $scaffold = $read->scaffold($manager);
-        $type = $scaffold['type']->getWrappedType();
-        $this->assertEquals(
-            $redirectorScaffold->typeName(),
-            $type->config['name']
-        );
-
-        $pageScaffold = new DataObjectScaffolder(FakePage::class);
-        $pageScaffold->addToManager($manager);
-
-        $read = new Read(FakePage::class);
-        $read->setUsePagination(false);
-
-        $scaffold = $read->scaffold($manager);
-        $unionType = $scaffold['type']->getWrappedType();
-        $this->assertEquals(
-            $pageScaffold->typeName().'WithDescendants',
-            $unionType->name
-        );
-        $types = $unionType->getTypes();
-        $this->assertEquals(
-            $pageScaffold->typeName(),
-            $types[0]->config['name']
-        );
-        $this->assertEquals(
-            $redirectorScaffold->typeName(),
-            $types[1]->config['name']
-        );
     }
 }

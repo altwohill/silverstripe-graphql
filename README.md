@@ -47,6 +47,7 @@ composer require silverstripe/graphql
      - [Adding arbitrary queries and mutations](#adding-arbitrary-queries-and-mutations)
      - [Dealing with inheritance](#dealing-with-inheritance)
      - [Querying types that have descendants](#querying-types-that-have-descendants)
+     - [Customising the names of types and operations](#customising-the-names-of-types-and-operations)
    - [Versioned content](#versioned-content)
      - [Version-specific-operations](#version-specific-operations)
      - [Version-specific arguments](#version-specific-arguments)
@@ -306,7 +307,7 @@ class PaginatedReadMembersQueryCreator extends PaginatedQueryCreator
                 ]
             ])
             ->setSortableFields(['ID', 'FirstName', 'Email'])
-            ->setConnectionResolver(function ($obj, $args, $context) {
+            ->setConnectionResolver(function ($object, array $args, $context, ResolveInfo $info) {
                 $member = Member::singleton();
                 if (!$member->canView($context['currentUser'])) {
                     throw new \InvalidArgumentException(sprintf(
@@ -438,7 +439,7 @@ class MemberTypeCreator extends TypeCreator
             'Groups' => [
                 'type' => $groupsConnection->toType(),
                 'args' => $groupsConnection->args(),
-                'resolve' => function($obj, $args, $context) use ($groupsConnection) {
+                'resolve' => function($object, array $args, $context, ResolveInfo $info) use ($groupsConnection) {
                     return $groupsConnection->resolveList(
                         $obj->Groups(),
                         $args,
@@ -495,6 +496,7 @@ will automatically include it in the response.
 <?php
 namespace MyProject\GraphQL;
 
+use GraphQL\Type\Definition\ResolveInfo;
 use GraphQL\Type\Definition\Type;
 use SilverStripe\GraphQL\MutationCreator;
 use SilverStripe\GraphQL\OperationResolver;
@@ -524,7 +526,7 @@ class CreateMemberMutationCreator extends MutationCreator implements OperationRe
         ];
     }
 
-    public function resolve($object, array $args, $context, $info)
+    public function resolve($object, array $args, $context, ResolveInfo $info)
     {
         if (!singleton(Member::class)->canCreate($context['currentUser'])) {
             throw new \InvalidArgumentException('Member creation not allowed');
@@ -660,7 +662,7 @@ SilverStripe\GraphQL\Controller:
 
 Let's now expose the `Post` type. We'll choose the fields we want to offer, along with a simple query and mutation. To
 resolve queries and mutations, we'll need to specify the name of a resolver class. This class
-must implement the `SilverStripe\GraphQL\Scaffolding\ResolverInterface`. (More on this below).
+must implement the `SilverStripe\GraphQL\OperationResolver`. (More on this below).
 
 **Via YAML**:
 ```yaml
@@ -885,7 +887,7 @@ $scaffolder
             ->addArgs([
                 'Title' => 'String'
             ])
-            ->setResolver(function($obj, $args, $context) {
+            ->setResolver(function($object, array $args, $context, ResolveInfo $info) {
                 if (!singleton(Post::class)->canView($context['currentMember'])) {
                     throw new \Exception('Cannot view Post');
                 }
@@ -965,7 +967,7 @@ $scaffolder
             ->setArgDescriptions([
                 'MinimumCommentCount' => 'Use this parameter to specify the minimum number of comments per post'
             ])
-            ->setResolver(function($obj, $args, $context) {
+            ->setResolver(function($object, array $args, $context, ResolveInfo $info) {
                 if (!singleton(Post::class)->canView($context['currentMember'])) {
                     throw new \Exception('Cannot view Post');
                 }
@@ -985,19 +987,20 @@ $scaffolder
 #### Using a custom resolver
 
 As seen in the code example above, the simplest way to add a resolver is via an anonymous function
-via the `setResolver()` method. In YAML, you can't define such functions, so resolvers be names or instances of classes that implement the
-`ResolverInterface`.
+via the `setResolver()` method. In YAML, you can't define such functions, so resolvers be names or instances of
+classes that implement the `OperationResolver`.
 
 **When using the YAML approach, custom resolver classes are compulsory**, since you can't define closures in YAML.
 
 ```php
 namespace MyProject\GraphQL;
 
-use SilverStripe\GraphQL\Scaffolding\Interfaces\ResolverInterface;
+use GraphQL\Type\Definition\ResolveInfo;
+use SilverStripe\GraphQL\OperationResolver;
 
-class MyResolver implements ResolverInterface
+class MyResolver implements OperationResolver
 {
-    public function resolve($object, $args, $context, $info)
+    public function resolve($object, array $args, $context, ResolveInfo $info)
     {
         $post = Post::get()->byID($args['ID']);
         $post->Title = $args['NewTitle'];
@@ -1055,7 +1058,7 @@ $scaffolder
             ->addArgs([
                 'Title' => 'String'
             ])
-            ->setResolver(function ($obj, $args, $context) {
+            ->setResolver(function ($object, array $args, $context, ResolveInfo $info) {
                 if (!singleton(Post::class)->canView($context['currentMember'])) {
                     throw new \Exception('Cannot view Post');
                 }
@@ -1144,7 +1147,7 @@ $scaffolder
             ->addArgs([
                 'Title' => 'String'
             ])
-            ->setResolver(function ($obj, $args, $context) {
+            ->setResolver(function ($object, array $args, $context, ResolveInfo $info) {
                 if (!singleton(Post::class)->canView($context['currentMember'])) {
                     throw new \Exception('Cannot view Post');
                 }
@@ -1269,7 +1272,7 @@ $scaffolder
             ->addArgs([
                 'OnlyToday' => 'Boolean'
             ])
-            ->setResolver(function($obj, $args, $context) {
+            ->setResolver(function($object, array $args, $context, ResolveInfo $info) {
                 if (!singleton(Comment::class)->canView($context['currentMember'])) {
                     throw new \Exception('Cannot view Comment');
                 }
@@ -1358,7 +1361,7 @@ $scaffolder
             'ID' => 'ID!',
             'NewTitle' => 'String!'
         ])
-        ->setResolver(function ($obj, $args, $context) {
+        ->setResolver(function ($object, array $args, $context, ResolveInfo $info) {
             $post = Post::get()->byID($args['ID']);
             if ($post->canEdit($context['currentMember'])) {
                 $post->Title = $args['NewTitle'];
@@ -1370,7 +1373,7 @@ $scaffolder
         ->end()
     ->query('latestPost', Post::class)
         ->setUsePagination(false)
-        ->setResolver(function ($obj, $args, $context) {
+        ->setResolver(function ($object, array $args, $context, ResolveInfo $info) {
             if (singleton(Post::class)->canView($context['currentMember'])) {
                 return Post::get()->sort('Date', 'DESC')->first();
             }
@@ -1466,8 +1469,10 @@ $scaffolder
     ->type('SilverStripe\CMS\Model\RedirectorPage')
         ->addFields(['ID', 'ExternalURL', 'Content'])
         ->operation(SchemaScaffolder::READ)
+            ->setName('readRedirectors')
             ->end()
         ->operation(SchemaScaffolder::CREATE)
+            ->setName('createRedirector')
             ->end()
         ->end()
     ->type('Page')
@@ -1522,7 +1527,7 @@ input SiteTreeCreateInputType {
   # all fields from SiteTree
 }
 
-query readRedirectorPages {
+query readRedirectors {
   RedirectorPage
 }
 
@@ -1534,7 +1539,7 @@ query readSiteTrees {
   SiteTreeWithDescendants
 }
 
-mutation createRedirectorPage {
+mutation createRedirector {
   RedirectorPageCreateInputType
 }
 
@@ -1570,6 +1575,47 @@ query readSiteTrees {
   }
 }
 ```
+
+#### Customising the names of types and operations
+
+By default, the scaffolder will generate a type name for you based on the dataobject's `$table_name`
+setting and the output of its `singular_name()` method. Often times, these are poor proxies for
+a canonical name, e.g. `readMy_Really_Long_NameSpaced_BlogPosts`. To customise the type name, simply map a name to it in the `SilverStripe\GraphQL\Scaffolding\Schema`
+class.
+
+```yaml
+SilverStripe\GraphQL\Controller:
+  schema:
+    typeNames:
+      My\Really\Long\Namespaced\BlogPost: Blog
+```
+
+Note that `typeNames` is the mapping of dataobjects to the graphql types, whereas the `types`
+config is the list of type creators for non-scaffolded types, backed by php classes.
+`typeNames` is also used (and required by) scaffolding, whether via PHP or YML.
+
+Operations names are expressed using the type name of the dataobject they serve. That type name
+may be customised or computed automatically, as described above. For a deeper level of control, you can
+name the operation using the `name` property.
+
+```yaml
+...
+  operations:
+    read:
+      name: currentBlogs
+```
+
+The name of the operation has been fully customised to `currentBlogs`, returning the type `Blog`.
+
+```yaml
+...
+  operations:
+    read: true
+```
+
+Otherwise, the name of the read operation, given the `Schema` config above, will be `readBlogs`.
+
+
 ### Versioned content
 
 If the `silversrtripe/versioned` module is installed in your project (as it is with a default CMS install),
@@ -1732,7 +1778,7 @@ class MyCreateExtension extends Extension
   }
 
 
-  public function augmentMutation($obj, $args, $context, $info)
+  public function augmentMutation($object, array $args, $context, ResolveInfo $info)
   {
     if ($args['SendEmail']) {
       MyService::inst()->sendEmail();
@@ -1760,7 +1806,7 @@ class AddToCartOperation extends MutationScaffolder
             'addToCart operation is only for implementors of ProductInterface'
         );
       }
-      $this->setResolver(function($obj, array $args) {
+      $this->setResolver(function($object, array $args, $context, ResolveInfo $info) {
         $record = DataObject::get_by_id($this->dataObjectClass, $args['ID']);
         if (!$record) {
           throw new Exception('ID not found');

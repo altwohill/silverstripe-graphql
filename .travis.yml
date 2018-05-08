@@ -4,14 +4,14 @@ dist: trusty
 
 env:
   global:
-    - COMPOSER_ROOT_VERSION=1.1.x-dev
+    - COMPOSER_ROOT_VERSION=2.x-dev
 
 matrix:
   fast_finish: true
   include:
-    - php: 5.6
+    - php: 7.1.2
       env: DB=PGSQL PHPUNIT_TEST=1 PHPCS_TEST=1
-    - php: 7.0
+    - php: 7.1.2
       env: DB=MYSQL PHPUNIT_TEST=1
     - php: 7.1.2
       env: DB=MYSQL PDO=1 PHPUNIT_COVERAGE_TEST=1
@@ -26,9 +26,9 @@ before_script:
   - export PATH=~/.composer/vendor/bin:$PATH
   - composer validate
   - composer install --prefer-dist
-  - composer require --prefer-dist --no-update silverstripe/recipe-core:1.1.x-dev silverstripe/versioned:1.1.x-dev --prefer-dist
+  - composer require --prefer-dist --no-update silverstripe/recipe-core:1.2.x-dev silverstripe/versioned:1.2.x-dev --prefer-dist
   - composer update
-  - if [[ $DB == PGSQL ]]; then composer require silverstripe/postgresql:2.0.x-dev --prefer-dist; fi
+  - if [[ $DB == PGSQL ]]; then composer require silverstripe/postgresql:2.1.x-dev --prefer-dist; fi
   - if [[ $PHPCS_TEST ]]; then composer global require squizlabs/php_codesniffer:^3 --prefer-dist --no-interaction --no-progress --no-suggest -o; fi
 
 script:
